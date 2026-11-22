@@ -25,3 +25,11 @@
 .DS_Store
 .vscode/
 .idea/
+
+# Local Python packages and runtime state
+/.site_packages/
+/.hcu/desktop.sock.refs
+
+# Generated frontend files
+/frontend/node_modules/
+/frontend/dist/

@@ -29,14 +29,19 @@ from pathlib import Path
 # ---------------------------------------------------------------------------
 REPO_ROOT = Path(__file__).resolve().parent
 HCU_BINARY = REPO_ROOT / "artifacts" / "computer-use"
-DEFAULT_MODEL = "gemini-3-flash-preview"
+DEFAULT_MODEL = "gemini-3.1-flash-lite"
 FALLBACK_MODELS = [
-    "gemini-3-flash-preview",
-    "gemini-3.5-flash",
+    "gemini-3.1-flash-lite",
+    "gemini-3.5-flash-lite",
     "gemini-3.8-flash",
+    "gemini-3-flash-preview",
 ]
 
-# Set up paths for hcu_sdk
+# Set up paths for hcu_sdk and workspace site-packages
+SITE_PACKAGES = REPO_ROOT / ".site_packages"
+if SITE_PACKAGES.is_dir() and str(SITE_PACKAGES) not in sys.path:
+    sys.path.insert(0, str(SITE_PACKAGES))
+
 sys.path.insert(0, str(REPO_ROOT / "sdk" / "python"))
 try:
     import hcu_sdk as hcu
@@ -68,13 +73,18 @@ _desktop_client = None
 def _hcu_env() -> dict:
     """Build the subprocess environment for HCU with desktop session vars."""
     env = {k: v for k, v in os.environ.items()}
+    uid = os.getuid()
     if not env.get("DBUS_SESSION_BUS_ADDRESS"):
-        uid = os.getuid()
         dbus_path = f"/run/user/{uid}/bus"
         if os.path.exists(dbus_path):
             env["DBUS_SESSION_BUS_ADDRESS"] = f"unix:path={dbus_path}"
     if not env.get("DISPLAY"):
         env["DISPLAY"] = ":0"
+    if not env.get("XAUTHORITY"):
+        for cand in [f"/run/user/{uid}/gdm/Xauthority", str(Path.home() / ".Xauthority")]:
+            if os.path.exists(cand):
+                env["XAUTHORITY"] = cand
+                break
 
     for key in _DESKTOP_ENV_KEYS:
         val = os.environ.get(key, "")
@@ -133,6 +143,14 @@ def check_prerequisites() -> str:
         )
 
     api_key = os.environ.get("GEMINI_API_KEY", "").strip()
+    if not api_key:
+        # Check .env or ~/api_google
+        try:
+            from desktop_agent_core import get_gemini_api_key
+            api_key = get_gemini_api_key()
+        except Exception:
+            pass
+
     if not api_key:
         print("=" * 60)
         print("  GEMINI_API_KEY is not set.")
